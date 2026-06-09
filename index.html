@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>電工阻抗與功率換算器</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 450px;
+        }
+        h2 {
+            text-align: center;
+            color: #1a73e8;
+            margin-top: 0;
+            margin-bottom: 25px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #5f6368;
+        }
+        .control-row {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="number"] {
+            flex: 2;
+            padding: 10px;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input[type="number"]:focus {
+            border-color: #1a73e8;
+        }
+        select {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            background-color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .result-box {
+            background-color: #f8f9fa;
+            border-left: 5px solid #1a73e8;
+            padding: 15px;
+            border-radius: 0 6px 6px 0;
+            margin-top: 25px;
+        }
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .result-item:last-child {
+            margin-bottom: 0;
+        }
+        .value {
+            font-weight: bold;
+            color: #202124;
+        }
+        .alert {
+            color: #d93025;
+            background-color: #fce8e6;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>阻抗 & 功率換算器</h2>
+    
+    <div class="input-group">
+        <label for="voltage">電壓 (V)</label>
+        <div class="control-row">
+            <input type="number" id="voltage" value="12" step="any" placeholder="請輸入電壓">
+            <select id="v_unit">
+                <option value="1000">kV</option>
+                <option value="1" selected>V</option>
+                <option value="0.001">mV</option>
+                <option value="0.000001">μV</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="input-group">
+        <label for="current">電流 (I)</label>
+        <div class="control-row">
+            <input type="number" id="current" value="2" step="any" placeholder="請輸入電流">
+            <select id="i_unit">
+                <option value="1000">kA</option>
+                <option value="1" selected>A</option>
+                <option value="0.001">mA</option>
+                <option value="0.000001">μA</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="result-box">
+        <div class="result-item">
+            <span>計算阻抗 (Z):</span>
+            <span class="value" id="res_impedance">-</span>
+        </div>
+        <div class="result-item">
+            <span>消耗功率 (P):</span>
+            <span class="value" id="res_power">-</span>
+        </div>
+    </div>
+
+    <div class="alert" id="warning_msg"></div>
+</div>
+
+<script>
+    const voltageInput = document.getElementById('voltage');
+    const vUnitSelect = document.getElementById('v_unit');
+    const currentInput = document.getElementById('current');
+    const iUnitSelect = document.getElementById('i_unit');
+    
+    const resImpedance = document.getElementById('res_impedance');
+    const resPower = document.getElementById('res_power');
+    const warningMsg = document.getElementById('warning_msg');
+
+    // 自動格式化輸出單位 (例如 15000 歐姆轉為 15 kΩ)
+    function formatUnit(val, baseUnit) {
+        if (val === 0) return `0 ${baseUnit}`;
+        const absVal = Math.abs(val);
+        
+        if (absVal >= 1000000) {
+            return `${(val / 1000000).toFixed(4).replace(/\.?0+$/, '')} M${baseUnit}`;
+        } else if (absVal >= 1000) {
+            return `${(val / 1000).toFixed(4).replace(/\.?0+$/, '')} k${baseUnit}`;
+        } else if (absVal < 1 && absVal >= 0.001) {
+            return `${(val * 1000).toFixed(4).replace(/\.?0+$/, '')} m${baseUnit}`;
+        } else if (absVal < 0.001) {
+            return `${(val * 1000000).toFixed(4).replace(/\.?0+$/, '')} μ${baseUnit}`;
+        }
+        return `${val.toFixed(4).replace(/\.?0+$/, '')} ${baseUnit}`;
+    }
+
+    function calculate() {
+        // 取得輸入值並轉換為標準單位 (V 和 A)
+        const v_raw = parseFloat(voltageInput.value);
+        const i_raw = parseFloat(currentInput.value);
+        
+        const v_multiplier = parseFloat(vUnitSelect.value);
+        const i_multiplier = parseFloat(iUnitSelect.value);
+
+        // 隱藏警告
+        warningMsg.style.display = 'none';
+
+        if (isNaN(v_raw) || isNaN(i_raw)) {
+            resImpedance.innerText = '-';
+            resPower.innerText = '-';
+            return;
+        }
+
+        const V = v_raw * v_multiplier;
+        const I = i_raw * i_multiplier;
+
+        // 1. 計算功率 P = V * I
+        const P = V * I;
+        resPower.innerText = formatUnit(P, 'W');
+
+        // 2. 計算阻抗 Z = V / I
+        if (I === 0) {
+            if (V !== 0) {
+                resImpedance.innerText = '∞ (斷路)';
+            } else {
+                resImpedance.innerText = '未定 (無電壓電流)';
+            }
+        } else {
+            const Z = V / I;
+            resImpedance.innerText = formatUnit(Z, 'Ω');
+            
+            // 短路風險提示 (電流不為0，但電壓為0，或阻抗極低)
+            if (V === 0 && I !== 0) {
+                warningMsg.innerText = "警告：偵測到零電壓但有電流，可能為理想短路狀態！";
+                warningMsg.style.style.display = 'block';
+            }
+        }
+    }
+
+    // 監聽所有輸入與選單變更，達成即時換算
+    [voltageInput, vUnitSelect, currentInput, iUnitSelect].forEach(element => {
+        element.addEventListener('input', calculate);
+    });
+
+    // 初始執行一次
+    calculate();
+</script>
+
+</body>
+</html>
